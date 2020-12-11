@@ -1,0 +1,9 @@
+[Unit]
+Description=MACCHIATObin fan daemon
+After=dev-gpiochip1.device
+
+[Service]
+ExecStart=/usr/local/bin/fand
+
+[Install]
+WantedBy=multi-user.target
