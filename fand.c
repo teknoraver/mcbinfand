@@ -23,7 +23,7 @@
 #include <time.h>
 #include <gpiod.h>
 
-#define GPIO_DEV "/dev/gpiochip1"
+#define GPIO_DEV "/dev/gpiochip0"
 #define THERM_PATH "/sys/class/thermal/thermal_zone0/temp"
 
 #define MIN_TEMP 40000
@@ -43,7 +43,7 @@ static void sighandler(int _unused)
 
 static int read_temp()
 {
-	char buf[16] = { 0 };
+	char buf[48] = { 0 };
 	static FILE *ftemp;
 	int temp;
 
