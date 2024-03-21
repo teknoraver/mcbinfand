@@ -23,7 +23,7 @@
 #include <time.h>
 #include <gpiod.h>
 
-#define GPIO_DEV "/dev/gpiochip1"
+#define GPIO_DEV "/dev/gpiochip0"
 #define THERM_PATH "/sys/class/thermal/thermal_zone0/temp"
 
 #define MIN_TEMP 40000
