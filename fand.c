@@ -17,6 +17,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <setjmp.h>
@@ -81,34 +82,74 @@ static int duty_cycle(int temp)
 	return (temp - MIN_TEMP) * PWM_USECS / (MAX_TEMP - MIN_TEMP);
 }
 
-int main(int argc, char *argv[])
+static struct gpiod_line_request * get_request()
 {
+	struct gpiod_request_config *req_cfg;
+	struct gpiod_line_settings *settings;
+	struct gpiod_line_request *request;
+	struct gpiod_line_config *line_cfg;
 	struct gpiod_chip *chip;
-	struct gpiod_line *line;
-	struct timespec oldtp;
-	int on = PWM_USECS;
-	int off = 0;
-	int req;
+	unsigned int offset = 16;
+	int ret;
 
 	chip = gpiod_chip_open(GPIO_DEV);
 	if (!chip) {
 		perror("gpiod_chip_open");
-		return -1;
+		return NULL;
 	}
 
-	line = gpiod_chip_get_line(chip, 16);
-	if (!line) {
+	settings = gpiod_line_settings_new();
+	if (!settings) {
+		perror("gpiod_line_settings_new");
+		return NULL;
+	}
+
+	gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
+	gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_ACTIVE);
+
+	line_cfg = gpiod_line_config_new();
+	if (!line_cfg) {
+		perror("gpiod_line_config_new");
+		return NULL;
+	}
+
+	ret = gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings);
+	if (ret) {
+		perror("gpiod_line_config_add_line_settings");
+		return NULL;
+	}
+
+	req_cfg = gpiod_request_config_new();
+	if (!req_cfg) {
+		perror("gpiod_request_config_new");
+		return NULL;
+	}
+
+	gpiod_request_config_set_consumer(req_cfg, "fand");
+
+	request = gpiod_chip_request_lines(chip, req_cfg, line_cfg);
+	if (!request) {
 		perror("gpiod_chip_get_line");
 		gpiod_chip_close(chip);
-		return -1;
+		return NULL;
 	}
 
-	req = gpiod_line_request_output(line, "fand", 0);
-	if (req) {
-		perror("gpiod_line_request_output");
-		gpiod_chip_close(chip);
-		return -1;
-	}
+	gpiod_request_config_free(req_cfg);
+	gpiod_line_config_free(line_cfg);
+	gpiod_line_settings_free(settings);
+	gpiod_chip_close(chip);
+
+	return request;
+}
+
+int main(int argc, char *argv[])
+{
+	struct gpiod_line_request *request;
+	struct timespec oldtp;
+	int off = 0;
+	int on = PWM_USECS;
+
+	request = get_request();
 
 	signal(SIGINT, sighandler);
 	signal(SIGQUIT, sighandler);
@@ -134,11 +175,11 @@ int main(int argc, char *argv[])
 		}
 
 		if (on) {
-			gpiod_line_set_value(line, 1);
+			gpiod_line_request_set_value(request, off, GPIOD_LINE_VALUE_ACTIVE);
 			usleep(on);
 		}
 		if (off) {
-			gpiod_line_set_value(line, 0);
+			gpiod_line_request_set_value(request, off, GPIOD_LINE_VALUE_INACTIVE);
 			usleep(off);
 		}
 	}
@@ -147,8 +188,7 @@ int main(int argc, char *argv[])
 
 	/* Don't leave the fan off and burn the CPU */
 	usleep(100000);
-	gpiod_line_set_value(line, 1);
-	gpiod_chip_close(chip);
+	gpiod_line_request_set_value(request, off, GPIOD_LINE_VALUE_ACTIVE);
 
 	return 0;
 }
